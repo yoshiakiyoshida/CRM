@@ -1,20 +1,26 @@
-FROM ruby:2.7
+FROM oiax/rails6-deps:latest
 
-# yarnのインストール
-RUN apt-get update && apt-get install -y curl apt-transport-https wget && \
-  curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add - && \
-  echo "deb https://dl.yarnpkg.com/debian/ stable main" | tee /etc/apt/sources.list.d/yarn.list && \
-  apt-get update && apt-get install -y yarn
+ARG UID=1000
+ARG GID=1000
 
-# Nodeのインストール
-RUN curl -sL https://deb.nodesource.com/setup_13.x | bash - && \
-  apt-get install -y nodejs
+RUN mkdir /var/mail
+RUN groupadd -g $GID devel
+RUN useradd -u $UID -g devel -m devel
+RUN echo "devel ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
-# コンテナ内の作業ディレクトリ
-WORKDIR /app
+WORKDIR /tmp
+COPY init/Gemfile /tmp/Gemfile
+COPY init/Gemfile.lock /tmp/Gemfile.lock
+RUN bundle install
 
-# ローカルの作業場所を、コンテナ内の作業場所にコピー
-COPY ./src /app
+COPY ./apps /apps
 
-# 出力メッセージ
-CMD echo "Webコンテナが起動しました"
+RUN apk add --no-cache openssl
+
+USER devel
+
+RUN openssl rand -hex 64 > /home/devel/.secret_key_base
+RUN echo $'export SECRET_KEY_BASE=$(cat /home/devel/.secret_key_base)' \
+  >> /home/devel/.bashrc
+
+WORKDIR /apps
